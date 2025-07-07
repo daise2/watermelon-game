@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍉 커스텀 수박 게임</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .game-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.15);
+            text-align: center;
+            max-width: 500px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .game-header {
+            margin-bottom: 25px;
+        }
+        
+        .game-header h1 {
+            color: #333;
+            margin: 0;
+            font-size: 3em;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { filter: brightness(1); }
+            to { filter: brightness(1.1); }
+        }
+        
+        .score {
+            font-size: 1.8em;
+            color: #555;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        
+        .score span {
+            color: #ff6b6b;
+            text-shadow: 0 2px 4px rgba(255,107,107,0.3);
+        }
+        
+        #gameCanvas {
+            border: 4px solid #333;
+            border-radius: 20px;
+            background: linear-gradient(180deg, #f0f8ff 0%, #e6f3ff 100%);
+            display: block;
+            margin: 0 auto;
+            box-shadow: inset 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            margin-top: 25px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        button:active {
+            transform: translateY(-1px);
+        }
+        
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .info p {
+            margin: 5px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .loading {
+            color: #666;
+            font-style: italic;
+            margin-top: 10px;
+        }
+        
+        @media (max-width: 480px) {
+            .game-container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            .game-header h1 {
+                font-size: 2.5em;
+            }
+            
+            #gameCanvas {
+                width: 350px;
+                height: 525px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-header">
+            <h1>🍉 수박 게임</h1>
+            <div class="score">점수: <span id="score">0</span></div>
+        </div>
+        
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        
+        <div class="controls">
+            <button onclick="resetGame()">🔄 다시 시작</button>
+            <button onclick="pauseGame()" id="pauseBtn">⏸️ 일시 정지</button>
+        </div>
+        
+        <div class="info">
+            <p>🎮 <strong>조작법:</strong> 마우스/터치로 이동, 클릭/탭으로 떨어뜨리기</p>
+            <p>🎯 <strong>목표:</strong> 같은 과일끼리 합쳐서 수박 만들기!</p>
+            <div id="loadingStatus" class="loading">사진 로딩 중...</div>
+        </div>
+    </div>
+
+    <script>
+        // 게임 변수들
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let score = 0;
+        let gameRunning = true;
+        let gamePaused = false;
+        let currentFruit = null;
+        let fruits = [];
+        let nextFruitType = 0;
+        let mouseX = 200;
+        let customImages = [];
+        let imagesLoaded = 0;
+        
+        // 과일 설정 (크기 순서대로)
+        const fruitConfig = [
+            { size: 15, color: '#ff6b6b', name: '체리', file: 'fruit1.jpg' },
+            { size: 20, color: '#ff9f43', name: '살구', file: 'fruit2.jpg' },
+            { size: 25, color: '#feca57', name: '레몬', file: 'fruit3.jpg' },
+            { size: 30, color: '#48dbfb', name: '라임', file: 'fruit4.jpg' },
+            { size: 35, color: '#ff6348', name: '토마토', file: 'fruit5.jpg' },
+            { size: 40, color: '#ff9ff3', name: '복숭아', file: 'fruit6.jpg' },
+            { size: 45, color: '#54a0ff', name: '자두', file: 'fruit7.jpg' },
+            { size: 50, color: '#5f27cd', name: '가지', file: 'fruit8.jpg' },
+            { size: 55, color: '#00d2d3', name: '배', file: 'fruit9.jpg' },
+            { size: 60, color: '#ff9f43', name: '오렌지', file: 'fruit10.jpg' },
+            { size: 70, color: '#2ed573', name: '수박', file: 'fruit11.jpg' }
+        ];
+        
+        // 이미지 로드 함수
+        function loadCustomImages() {
+            const totalImages = fruitConfig.length;
+            
+            fruitConfig.forEach((config, index) => {
+                const img = new Image();
+                
+                img.onload = function() {
+                    customImages[index] = img;
+                    imagesLoaded++;
+                    
+                    if (imagesLoaded === totalImages) {
+                        document.getElementById('loadingStatus').textContent = '✅ 모든 사진이 로드되었습니다!';
+                        setTimeout(() => {
+                            document.getElementById('loadingStatus').style.display = 'none';
+                        }, 2000);
+                    } else {
+                        document.getElementById('loadingStatus').textContent = `사진 로딩 중... (${imagesLoaded}/${totalImages})`;
+                    }
+                };
+                
+                img.onerror = function() {
+                    console.log(`기본 이미지 사용: ${config.name}`);
+                    imagesLoaded++;
+                    
+                    if (imagesLoaded === totalImages) {
+                        document.getElementById('loadingStatus').textContent = '✅ 로딩 완료! (일부 기본 이미지 사용)';
+                        setTimeout(() => {
+                            document.getElementById('loadingStatus').style.display = 'none';
+                        }, 2000);
+                    }
+                };
+                
+                // images 폴더에서 이미지 로드
+                img.src = `images/${config.file}`;
+            });
+        }
+        
+        // 과일 클래스
+        class Fruit {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.size = fruitConfig[type].size;
+                this.color = fruitConfig[type].color;
+                this.vx = 0;
+                this.vy = 0;
+                this.onGround = false;
+                this.merged = false;
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+            }
+            
+            update() {
+                if (!this.onGround) {
+                    this.vy += 0.3; // 중력
+                    this.y += this.vy;
+                    this.x += this.vx;
+                    this.rotation += this.rotationSpeed;
+                    
+                    // 바닥 충돌
+                    if (this.y + this.size >= canvas.height - 10) {
+                        this.y = canvas.height - 10 - this.size;
+                        this.vy = 0;
+                        this.onGround = true;
+                        this.rotationSpeed *= 0.8;
+                    }
+                    
+                    // 벽 충돌
+                    if (this.x - this.size < 0) {
+                        this.x = this.size;
+                        this.vx = -this.vx * 0.7;
+                    }
+                    if (this.x + this.size > canvas.width) {
+                        this.x = canvas.width - this.size;
+                        this.vx = -this.vx * 0.7;
+                    }
+                }
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                if (customImages[this.type]) {
+                    // 커스텀 이미지 그리기
+                    ctx.drawImage(customImages[this.type], 
+                        -this.size, -this.size, 
+                        this.size * 2, this.size * 2);
+                } else {
+                    // 기본 원형 과일
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 테두리
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    // 과일 이름 텍스트
+                    ctx.fillStyle = '#333';
+                    ctx.font = `${Math.max(this.size/3, 10)}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(fruitConfig[this.type].name, 0, this.size/6);
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        function createNextFruit() {
+            nextFruitType = Math.floor(Math.random() * 5); // 처음 5개 과일만
+            currentFruit = new Fruit(mouseX, 50, nextFruitType);
+        }
+        
+        function dropFruit() {
+            if (currentFruit && gameRunning && !gamePaused) {
+                currentFruit.vy = 2;
+                fruits.push(currentFruit);
+                createNextFruit();
+            }
+        }
+        
+        function checkCollisions() {
+            for (let i = 0; i < fruits.length; i++) {
+                for (let j = i + 1; j < fruits.length; j++) {
+                    const fruit1 = fruits[i];
+                    const fruit2 = fruits[j];
+                    
+                    const dx = fruit1.x - fruit2.x;
+                    const dy = fruit1.y - fruit2.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < fruit1.size + fruit2.size) {
+                        // 같은 타입이면 합치기
+                        if (fruit1.type === fruit2.type && !fruit1.merged && !fruit2.merged && fruit1.type < 10) {
+                            mergeFruits(fruit1, fruit2, i, j);
+                        } else {
+                            // 충돌 처리
+                            const overlap = fruit1.size + fruit2.size - distance;
+                            const moveX = (dx / distance) * overlap * 0.5;
+                            const moveY = (dy / distance) * overlap * 0.5;
+                            
+                            fruit1.x += moveX;
+                            fruit1.y += moveY;
+                            fruit2.x -= moveX;
+                            fruit2.y -= moveY;
+                        }
+                    }
+                }
+            }
+        }
+        
+        function mergeFruits(fruit1, fruit2, index1, index2) {
+            const newX = (fruit1.x + fruit2.x) / 2;
+            const newY = (fruit1.y + fruit2.y) / 2;
+            const newType = fruit1.type + 1;
+            
+            // 점수 추가
+            score += (newType + 1) * 10;
+            document.getElementById('score').textContent = score;
+            
+            // 기존 과일 제거
+            fruits.splice(Math.max(index1, index2), 1);
+            fruits.splice(Math.min(index1, index2), 1);
+            
+            // 새 과일 생성
+            if (newType < fruitConfig.length) {
+                const newFruit = new Fruit(newX, newY, newType);
+                newFruit.onGround = true;
+                fruits.push(newFruit);
+                
+                // 수박 완성 축하
+                if (newType === fruitConfig.length - 1) {
+                    setTimeout(() => {
+                        alert('🎉 축하합니다! 수박을 만드셨습니다! 🍉');
+                    }, 500);
+                }
+            }
+        }
+        
+        function gameLoop() {
+            if (!gameRunning || gamePaused) return;
+            
+            // 화면 지우기
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 과일들 업데이트 및 그리기
+            fruits.forEach(fruit => {
+                fruit.update();
+                fruit.draw();
+            });
+            
+            // 현재 과일 그리기
+            if (currentFruit) {
+                currentFruit.x = mouseX;
+                currentFruit.draw();
+            }
+            
+            // 충돌 체크
+            checkCollisions();
+            
+            // 게임 오버 체크
+            if (fruits.some(fruit => fruit.y - fruit.size < 100)) {
+                gameRunning = false;
+                setTimeout(() => {
+                    alert(`게임 오버! 🎮\n최종 점수: ${score}점\n\n다시 도전해보세요! 💪`);
+                }, 500);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function resetGame() {
+            fruits = [];
+            score = 0;
+            gameRunning = true;
+            gamePaused = false;
+            document.getElementById('score').textContent = score;
+            document.getElementById('pauseBtn').textContent = '⏸️ 일시 정지';
+            createNextFruit();
+            gameLoop();
+        }
+        
+        function pauseGame() {
+            if (!gameRunning) return;
+            
+            gamePaused = !gamePaused;
+            const pauseBtn = document.getElementById('pauseBtn');
+            
+            if (gamePaused) {
+                pauseBtn.textContent = '▶️ 계속하기';
+            } else {
+                pauseBtn.textContent = '⏸️ 일시 정지';
+                gameLoop();
+            }
+        }
+        
+        // 이벤트 리스너
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = Math.max(20, Math.min(canvas.width - 20, e.clientX - rect.left));
+        });
+        
+        canvas.addEventListener('click', dropFruit);
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            mouseX = Math.max(20, Math.min(canvas.width - 20, e.touches[0].clientX - rect.left));
+        });
+        
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            dropFruit();
+        });
+        
+        // 키보드 컨트롤
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                dropFruit();
+            } else if (e.code === 'KeyP') {
+                pauseGame();
+            } else if (e.code === 'KeyR') {
+                resetGame();
+            }
+        });
+        
+        // 게임 시작
+        loadCustomImages();
+        createNextFruit();
+        gameLoop();
+    </script>
+</body>
+</html>
