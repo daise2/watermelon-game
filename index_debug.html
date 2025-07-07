@@ -1,0 +1,154 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>🍉 디버깅 수박 게임</title>
+  <style>
+    body { margin: 0; background: #fafafa; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+    h1 { margin: 20px; }
+    #scoreBox { margin: 10px; font-size: 20px; }
+    canvas { border: 3px solid #333; border-radius: 10px; background: #e6f3ff; }
+  </style>
+</head>
+<body>
+  <h1>🍉 디버깅 수박 게임</h1>
+  <div id="scoreBox">점수: <span id="score">0</span></div>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let fruits = [];
+    let currentFruit = null;
+    let score = 0;
+    let mouseX = canvas.width / 2;
+    const fruitConfig = Array.from({ length: 11 }, (_, i) => ({
+      size: 20 + i * 5,
+      color: '#' + Math.floor(Math.random() * 16777215).toString(16),
+      name: `F${i + 1}`,
+      file: `fruit${i + 1}.jpg`
+    }));
+    let customImages = [];
+
+    class Fruit {
+      constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.size = fruitConfig[type].size;
+        this.vx = 0;
+        this.vy = 0;
+        this.onGround = false;
+        this.merged = false;
+      }
+      update() {
+        if (!this.onGround) {
+          this.vy += 0.3;
+          this.y += this.vy;
+          this.x += this.vx;
+          if (this.y + this.size >= canvas.height) {
+            this.y = canvas.height - this.size;
+            this.vy = 0;
+            this.onGround = true;
+          }
+        }
+      }
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        if (customImages[this.type]) {
+          ctx.drawImage(customImages[this.type], -this.size, -this.size, this.size * 2, this.size * 2);
+        } else {
+          ctx.fillStyle = fruitConfig[this.type].color;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.font = '12px Arial';
+          ctx.fillText(fruitConfig[this.type].name, -10, 4);
+        }
+        ctx.restore();
+      }
+    }
+
+    function createNextFruit() {
+      const type = Math.floor(Math.random() * 5);
+      currentFruit = new Fruit(mouseX, 50, type);
+    }
+
+    function dropFruit() {
+      if (currentFruit) {
+        currentFruit.vy = 2;
+        fruits.push(currentFruit);
+        createNextFruit();
+      }
+    }
+
+    function mergeFruits(a, b, i1, i2) {
+      const newType = a.type + 1;
+      console.log(`✅ 합체: ${a.type} + ${b.type} → ${newType}`);
+      const newX = (a.x + b.x) / 2;
+      const newY = (a.y + b.y) / 2;
+      fruits.splice(Math.max(i1, i2), 1);
+      fruits.splice(Math.min(i1, i2), 1);
+      if (newType < fruitConfig.length) {
+        const f = new Fruit(newX, newY, newType);
+        f.onGround = true;
+        fruits.push(f);
+        score += (newType + 1) * 10;
+        document.getElementById("score").textContent = score;
+      }
+    }
+
+    function checkCollisions() {
+      for (let i = 0; i < fruits.length; i++) {
+        for (let j = i + 1; j < fruits.length; j++) {
+          const a = fruits[i], b = fruits[j];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < a.size + b.size) {
+            console.log(`충돌 감지: ${a.type} vs ${b.type} | 거리: ${dist.toFixed(1)}`);
+            if (a.type === b.type && !a.merged && !b.merged && a.type < fruitConfig.length - 1) {
+              mergeFruits(a, b, i, j);
+              return;
+            }
+          }
+        }
+      }
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      fruits.forEach(f => { f.update(); f.draw(); });
+      if (currentFruit) {
+        currentFruit.x = mouseX;
+        currentFruit.draw();
+      }
+      checkCollisions();
+      requestAnimationFrame(gameLoop);
+    }
+
+    canvas.addEventListener("mousemove", e => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+    });
+    canvas.addEventListener("click", dropFruit);
+    document.addEventListener("keydown", e => {
+      if (e.code === "Space") dropFruit();
+    });
+
+    function loadCustomImages() {
+      fruitConfig.forEach((config, i) => {
+        const img = new Image();
+        img.onload = () => customImages[i] = img;
+        img.onerror = () => console.warn(`기본 이미지 사용: ${config.file}`);
+        img.src = `images/${config.file}`;
+      });
+    }
+
+    loadCustomImages();
+    createNextFruit();
+    gameLoop();
+  </script>
+</body>
+</html>
